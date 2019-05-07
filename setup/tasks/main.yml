@@ -1,0 +1,12 @@
+---
+
+   - name: create dxtoolkit configuration
+     template: src=dxtools.conf.j2 dest="{{ DXLOC }}/dxtools.conf" mode=755
+
+   - name: create dsource ingestion script
+     template: src=adddsource.j2 dest="{{ playbook_dir }}/adddsource.sh" mode=755
+     when: dxtoolkit == False
+
+   - name: create vdb provision  script
+     template: src=addvdb.j2 dest="{{ playbook_dir }}/addvdb.sh" mode=755
+     when: dxtoolkit == False
