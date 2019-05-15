@@ -21,6 +21,7 @@
       with_nested:
           - "{{ VDBDSOURCE_LIST }}"
           - "{{ lookup('sequence','start=1 end=3', wantlist=True) }}"
+      tags: snapshots
 
     - name: delete bookmark (not JS)
       delegate_to: 127.0.0.1
@@ -42,19 +43,27 @@
          echo ${SNAPSHOT_TIME} | cut -b1-16
       register: snapshot
       loop: "{{ VDBDSOURCE_LIST }}"
-      tags: snapshot
-
+      tags:
+        - refresh_time
+        - refresh
 
     - name: refresh a VDB
       delegate_to: 127.0.0.1
-      shell: "{{ DXLOC }}/dx_refresh_db -name \"{{ item.item.vdb }}\" -timestamp \"{{ item.stdout }}\""
+      shell: |
+             sleep 60
+             "{{ DXLOC }}/dx_refresh_db" -name "{{ item.item.vdb }}" -timestamp "{{ item.stdout }}"
       with_items: "{{ snapshot.results }}"
-      tags: snapshot
+      tags:
+        - refresh_time
+        - refresh
 
     - name: rewind a VDB to bookmark
       delegate_to: 127.0.0.1
-      shell: "{{ DXLOC }}/dx_rewind_db -name {{ item.vdb }} -timestamp bookmarktest_{{ item.vdb }}"
+      shell: |
+             sleep 60
+             "{{ DXLOC }}/dx_rewind_db" -name "{{ item.vdb }}" -timestamp "bookmarktest_{{ item.vdb }}"
       loop: "{{ VDBDSOURCE_LIST }}"
+      tags: bookmarks
 
     - name: Get VDB snapshot time
       delegate_to: 127.0.0.1
@@ -63,14 +72,14 @@
          echo ${SNAPSHOT_TIME} | cut -b1-16
       register: vdbsnapshot
       loop: "{{ VDBDSOURCE_LIST }}"
-      tags: rewind
+      tags: rewind_time
 
 
     - name: rewind a VDB to snapshot time
       delegate_to: 127.0.0.1
       shell: "{{ DXLOC }}/dx_rewind_db -name {{ item.item.vdb }} -timestamp \"{{ item.stdout }}\""
       with_items: "{{ vdbsnapshot.results }}"
-      tags: rewind
+      tags: rewind_time
 
     - name: Get dSource snapshot name
       delegate_to: 127.0.0.1
@@ -79,8 +88,14 @@
          echo ${SNAPSHOT_NAME}
       register: snapshotname
       loop: "{{ VDBDSOURCE_LIST }}"
+      tags:
+        - refresh_name
+        - refresh
 
     - name: refresh a VDB using snapshot name
       delegate_to: 127.0.0.1
       shell: "{{ DXLOC }}/dx_refresh_db -name {{ item.item.vdb }} -timestamp {{ item.stdout }}"
       with_items: "{{ snapshotname.results }}"
+      tags:
+        - refresh_name
+        - refresh

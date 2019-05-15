@@ -6,4 +6,4 @@
        - setup
        - dSource
        - vdb
-       #- snapshot_tests
+       - snapshot_tests

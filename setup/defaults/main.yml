@@ -1,16 +1,16 @@
 DXLOC: "/home/mprzepiorowski/dxtoolkit2"
 dxtoolkit: False
-VDBDSOURCE_LIST: [ {"dsource": "ds", "vdb": "slonik"} ]
-DELPHIX_ENGINE_IP: 172.16.180.136
+VDBDSOURCE_LIST: [ {"dsource": "POST11DS", "vdb": "POST11VDB"} ]
+DELPHIX_ENGINE_IP: marcindlpx.dcenter.delphix.com
 DELPHIX_USER: admin
 DELPHIX_PASSWORD: delphix
 
-DELPHIX_GROUP_NAME: "Sources"
+DELPHIX_GROUP_NAME: "Untitled"
 # name of database to add as dsource
-DELPHIX_SOURCE_DB_NAME: "ds"
-DELPHIX_SOURCEENV_NAME: "oracle18"
+DELPHIX_SOURCE_DB_NAME: "POST11DS"
+DELPHIX_SOURCEENV_NAME: "marcinposttgt.dcenter.delphix.com"
 DELPHIX_SOURCEENVUSER_NAME: "postgres"
-DELPHIX_STG_MOUNTBASE: "//var//lib//pgsql//staging"
+DELPHIX_STG_MOUNTBASE: "/mnt/provision/staging"
 DELPHIX_DSOURCE_PARAMETERS: {
       "delphixInitiatedBackupFlag": true,
       "keepStagingInSync": false,
@@ -21,18 +21,24 @@ DELPHIX_DSOURCE_PARAMETERS: {
           "userName": "delphix",
           "postgresSourcePort": 5432,
           "userPass": "delphix",
-          "sourceHostAddress": "172.16.180.129"
+          "sourceHostAddress": "marcinpostsrc.dcenter.delphix.com"
         }
       ],
       "configSettingsStg": []
 }
 
-DELPHIX_TARGETENV_NAME: "oracle18"
+DELPHIX_TARGETENV_NAME: "marcinposttgt.dcenter.delphix.com"
 DELPHIX_TARGETENVUSER_NAME: "postgres"
 DELPHIX_VDB_MOUNTBASE: "/mnt/provision/"
-DELPHIX_VDB_REPO_NAME: "Postgres vFiles (9.6)"
+DELPHIX_VDB_REPO_NAME: "Postgres vFiles (11.1)"
 DELPHIX_VDB_SOURCE_PARAMETERS: {
       "postgresPort": 6666,
       "configSettingsStg": []
 }
 DELPHIX_VDB_SOURCECONFIG_PARAMETERS: {}
+
+CREATE_VDB: False
+CREATE_DSOURCE: True
+
+# add flag to control adding VDB and dSource
+# provision a VDB from the existing VDB and refresh

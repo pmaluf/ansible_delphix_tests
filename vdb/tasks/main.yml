@@ -17,21 +17,22 @@
      shell: '"{{ DXLOC }}/dx_remove_db" -name "{{ item.item.vdb }}" -skip'
      register: dbremove
      ignore_errors: yes
-     when: item.rc == 0
+     when: (item.rc == 0 and CREATE_VDB == True)
      with_items: "{{ dbcheck.results }}"
      tags: deletevdb
 
    - name: Delete VDB with force option
      delegate_to: 127.0.0.1
      shell: '"{{ DXLOC }}/dx_remove_db" -name "{{ item.item.item.vdb }}" -skip -force'
-     when: (item.changed == True and item.rc != 0 )
+     when: (CREATE_VDB == True and item.changed == True and item.rc != 0 )
      with_items: "{{ dbremove.results }}"
      tags: deletevdb
 
    - block:
         - name: register time
           set_fact: time="{{ ansible_date_time.date + \" \" + ansible_date_time.time }}"
-        - name:
+
+        - name: Provision a VDB (shell)
           delegate_to: 127.0.0.1
           shell: "{{ playbook_dir }}/addvdb.sh {{ item.vdb }} {{ item.dsource }}"
           loop: "{{ VDBDSOURCE_LIST }}"
@@ -49,13 +50,13 @@
           until: jobstatus.rc == 0
           loop: "{{ VDBDSOURCE_LIST }}"
 
-     when: dxtoolkit == False
+     when: (CREATE_VDB == True and dxtoolkit == False)
 
    - block:
-        - name:
+        - name: Provision a VDB (dxtoolkit)
           delegate_to: 127.0.0.1
           shell: "{{ DXLOC }}/dx_provision_db "
-     when: dxtoolkit == True
+     when: (CREATE_VDB == True and dxtoolkit == True)
 
    - name: Check if VDB exists and it's running
      delegate_to: 127.0.0.1
