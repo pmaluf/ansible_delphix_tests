@@ -23,18 +23,18 @@
           - "{{ lookup('sequence','start=1 end=3', wantlist=True) }}"
       tags: snapshots
 
-    - name: delete bookmark (not JS)
-      delegate_to: 127.0.0.1
-      shell: "{{ DXLOC }}/dx_ctl_bookmarks -name bookmarktest_{{ item.vdb }} -action delete"
-      ignore_errors: yes
-      loop: "{{ VDBDSOURCE_LIST }}"
-      tags: bookmarks
-
-    - name: create bookmark (not JS)
-      delegate_to: 127.0.0.1
-      shell: "{{ DXLOC }}/dx_ctl_bookmarks -name bookmarktest_{{ item.vdb }} -action create -dbname {{ item.vdb }} -timestamp latest"
-      loop: "{{ VDBDSOURCE_LIST }}"
-      tags: bookmarks
+    # - name: delete bookmark (not JS)
+    #   delegate_to: 127.0.0.1
+    #   shell: "{{ DXLOC }}/dx_ctl_bookmarks -name bookmarktest_{{ item.vdb }} -action delete"
+    #   ignore_errors: yes
+    #   loop: "{{ VDBDSOURCE_LIST }}"
+    #   tags: bookmarks
+    #
+    # - name: create bookmark (not JS)
+    #   delegate_to: 127.0.0.1
+    #   shell: "{{ DXLOC }}/dx_ctl_bookmarks -name bookmarktest_{{ item.vdb }} -action create -dbname {{ item.vdb }} -timestamp latest"
+    #   loop: "{{ VDBDSOURCE_LIST }}"
+    #   tags: bookmarks
 
     - name: Get dSource snapshot time
       delegate_to: 127.0.0.1
@@ -57,13 +57,13 @@
         - refresh_time
         - refresh
 
-    - name: rewind a VDB to bookmark
-      delegate_to: 127.0.0.1
-      shell: |
-             sleep 60
-             "{{ DXLOC }}/dx_rewind_db" -name "{{ item.vdb }}" -timestamp "bookmarktest_{{ item.vdb }}"
-      loop: "{{ VDBDSOURCE_LIST }}"
-      tags: bookmarks
+    # - name: rewind a VDB to bookmark
+    #   delegate_to: 127.0.0.1
+    #   shell: |
+    #          sleep 60
+    #          "{{ DXLOC }}/dx_rewind_db" -name "{{ item.vdb }}" -timestamp "bookmarktest_{{ item.vdb }}"
+    #   loop: "{{ VDBDSOURCE_LIST }}"
+    #   tags: bookmarks
 
     - name: Get VDB snapshot time
       delegate_to: 127.0.0.1
