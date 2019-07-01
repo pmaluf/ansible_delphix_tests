@@ -1,0 +1,71 @@
+---
+
+    - name: Check if VDB for container exists and it's running
+      delegate_to: 127.0.0.1
+      shell: |
+         STATUS=`"{{ DXLOC }}/dx_get_db_env" -name "{{ DELPHIX_SELFSERVICE_TARGET }}" -format csv -nohead | awk -F',' '{print $9};'`
+         if [ "${STATUS}" != "RUNNING" ]; then
+           exit 1;
+         fi;
+      retries: 10
+      register: dbstatus
+      delay: 5
+      until: dbstatus.rc == 0
+      tags: check
+
+    - name: Check if template is already provisioned
+      delegate_to: 127.0.0.1
+      shell: '"{{ DXLOC }}/dx_get_js_templates" -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}"'
+      register: ss_template
+      ignore_errors: yes
+      tags: template
+
+    - block:
+       - name: Get database info
+         delegate_to: 127.0.0.1
+         shell: '"{{ DXLOC }}/dx_get_db_env" -name {{ DELPHIX_SELFSERVICE_SOURCE }} -config -nohead -format csv | awk -F, ''{ printf("%s, {{ DELPHIX_SELFSERVICE_SOURCE }}, %s, 1", $4,$8); }'''
+         register: ss_create_template
+
+       - name: Create template
+         delegate_to: 127.0.0.1
+         shell: '"{{ DXLOC }}/dx_ctl_js_template" -source "{{ ss_create_template.stdout }}"  -action create -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}"'
+
+      when: ss_template.rc !=0
+      tags: template
+
+    - name: Check if container is already provisioned
+      delegate_to: 127.0.0.1
+      shell: '"{{ DXLOC }}/dx_get_js_containers" -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
+      register: ss_container
+      ignore_errors: yes
+      tags: container
+
+    - block:
+       - name: Get database info
+         delegate_to: 127.0.0.1
+         shell: '"{{ DXLOC }}/dx_get_db_env" -name {{ DELPHIX_SELFSERVICE_TARGET }} -nohead -format csv | awk -F, ''{ printf("%s,%s", $4,$3); }'''
+         register: ss_create_container
+
+       - name: Create container
+         delegate_to: 127.0.0.1
+         shell: '"{{ DXLOC }}/dx_ctl_js_container" -action create -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}" -container_def "{{ ss_create_container.stdout }}" -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}"'
+
+      when: ss_container.rc !=0
+      tags: container
+
+    - name: Create JS bookmark
+      delegate_to: 127.0.0.1
+      shell: '"{{ DXLOC }}/dx_ctl_js_bookmarks" -bookmark_name "cont_now" -bookmark_time latest -action create -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
+      register: ss_container
+      ignore_errors: yes
+      tags: container_ops
+
+    - name: register time
+      set_fact: time="{{ ansible_date_time.date + \" \" + ansible_date_time.time }}"
+
+    - name: Restore to JS bookmark
+      delegate_to: 127.0.0.1
+      shell: '"{{ DXLOC }}/dx_ctl_js_container" -action restore -timestamp cont_now -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
+      register: ss_container
+      ignore_errors: yes
+      tags: container_ops
