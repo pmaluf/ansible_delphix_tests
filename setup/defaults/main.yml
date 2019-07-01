@@ -40,5 +40,11 @@ DELPHIX_VDB_SOURCECONFIG_PARAMETERS: {}
 CREATE_VDB: False
 CREATE_DSOURCE: True
 
+DELPHIX_SELFSERVICE_TEMPLATE: demotemplate
+DELPHIX_SELFSERVICE_CONTAINER: democont
+DELPHIX_SELFSERVICE_SOURCE: "{{ VDBDSOURCE_LIST[0].dsource }}"
+DELPHIX_SELFSERVICE_TARGET: "{{ VDBDSOURCE_LIST[0].vdb }}"
+
+
 # add flag to control adding VDB and dSource
 # provision a VDB from the existing VDB and refresh
