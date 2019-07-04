@@ -57,15 +57,37 @@
       delegate_to: 127.0.0.1
       shell: '"{{ DXLOC }}/dx_ctl_js_bookmarks" -bookmark_name "cont_now" -bookmark_time latest -action create -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
       register: ss_container
-      ignore_errors: yes
       tags: container_ops
 
     - name: register time
-      set_fact: time="{{ ansible_date_time.date + \" \" + ansible_date_time.time }}"
+      delegate_to: 127.0.0.1
+      set_fact: time="{{ lookup('pipe', 'date +\"%Y-%m-%d %H:%M:%S\"') }}"
+      tags: cont_time, temp_time
 
     - name: Restore to JS bookmark
       delegate_to: 127.0.0.1
       shell: '"{{ DXLOC }}/dx_ctl_js_container" -action restore -timestamp cont_now -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
       register: ss_container
-      ignore_errors: yes
       tags: container_ops
+
+    - debug:
+        var: time
+      tags: cont_time, temp_time
+
+    - name: Restore to JS point in time
+      delegate_to: 127.0.0.1
+      shell: '"{{ DXLOC }}/dx_ctl_js_container" -action restore -timestamp "{{ time }}" -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
+      register: ss_container
+      tags: container_ops,cont_time
+
+    - name: Refresh container
+      delegate_to: 127.0.0.1
+      shell: '"{{ DXLOC }}/dx_ctl_js_container" -action refresh  -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
+      register: ss_container
+      tags: container_ops
+
+    - name: Restore to JS from template timeline
+      delegate_to: 127.0.0.1
+      shell: '"{{ DXLOC }}/dx_ctl_js_container" -action restore -timestamp "{{ time }}" -fromtemplate -template_name "{{ DELPHIX_SELFSERVICE_TEMPLATE }}" -container_name "{{ DELPHIX_SELFSERVICE_CONTAINER }}"'
+      register: ss_container
+      tags: container_ops, temp_time
