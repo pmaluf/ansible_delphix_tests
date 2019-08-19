@@ -1,0 +1,114 @@
+---
+ 
+   - name: include vars
+     include_vars: default_vars.yml
+
+   - name: Update hostname
+     copy:
+          dest: "/etc/hostname"
+          content: "{{ inventory_hostname }}\n"
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+
+   - name: Update hostname on shell
+     shell: hostname "{{ inventory_hostname }}"
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+
+   - name: Add a new user named provision
+     user:
+          name=provision
+          password={{ provision_password }}
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+ 
+   - name: Add provision user to the sudoers
+     lineinfile:
+          path: "/etc/sudoers"
+          regexp: '^provision  ALL=(ALL)  NOPASSWD: ALL'
+          line: "provision  ALL=(ALL)  NOPASSWD: ALL"
+          state: present
+          backup: yes
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+
+   - name: Deploy SSH Key
+     authorized_key: user=provision
+                     key="{{ lookup('file', '/home/provision/.ssh/id_rsa.pub') }}"
+                     state=present
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+
+   - name: Add a new user named delphix
+     user:
+          name=delphix
+          password='$6$CCqtSwEMyCX2$TWJ0bxTK/VwH/KQq3DLL.IfpPdCjAKC62Z.mY9ZrYZab0X1wVkpd/TnZXIec.9K.Rufl6v862goovnPQGcLra0'
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+ 
+   - name: Add delphix user to the sudoers
+     lineinfile:
+          path: "/etc/sudoers"
+          regexp: '^delphix  ALL=(ALL)  NOPASSWD: ALL'
+          line: "delphix  ALL=(ALL)  NOPASSWD: ALL"
+          state: present
+          backup: yes
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+
+   - name: create directory if they don't exist
+     file:
+       path: "{{ item }}"
+       state: directory
+       owner: delphix
+       group: delphix
+       mode: 0775
+     with_items:
+       - /u01/delphix
+       - /u01/delphix/toolkit
+       - /home/delphix/.ssh
+
+   - name: Deploy SSH Key
+     authorized_key: user=delphix
+                     key="{{ lookup('file', '/home/provision/.ssh/id_rsa.pub') }}"
+                     path="/home/delphix/.ssh/id_rsa.pub"
+                     state=present
+     remote_user: root
+     become: true
+     when: inventory_hostname in groups['mongoservers']
+
+   #- name: Disable Password Authentication
+     #lineinfile:
+           #dest=/etc/ssh/sshd_config
+           #regexp='^PasswordAuthentication'
+           #line="PasswordAuthentication no"
+           #state=present
+           #backup=yes
+     #notify:
+       #- restart ssh
+     #when: inventory_hostname in groups['mongoservers']
+
+   #- name: Disable Root Login
+     #lineinfile:
+           #dest=/etc/ssh/sshd_config
+           #regexp='^PermitRootLogin'
+           #line="PermitRootLogin no"
+           #state=present
+           #backup=yes
+     #notify:
+       #- restart ssh
+     #when: inventory_hostname in groups['mongoservers']
+     
+   - name: restart ssh
+     service:
+       name=sshd
+       state=restarted
+     become: true
+     when: inventory_hostname in groups['mongoservers']

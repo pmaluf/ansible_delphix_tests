@@ -1,0 +1,263 @@
+---
+
+- name: delete socket file if they exist
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /var/run/yum.pid
+
+- name: upgrade all packages
+  yum: name=* state=latest
+
+- name: Copy mongodb repository 
+  copy: 
+    src=files/mongodb-org-4.0.repo 
+    dest=/etc/yum.repos.d/mongodb-org-4.0.repo
+
+- name: Ensure a list of mongodb packages installed
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+    - mongodb-org-4.0.11
+    - tree
+    - python-pip
+  register: pkg_install_output
+
+- name: print pkg_install_output
+  debug:
+    msg: "{{ pkg_install_output }}"
+
+- name: stop mongodb service
+  service:
+    name: mongod
+    state: stopped
+
+- name: remove mongod default a file
+  file:
+    path: /etc/mongod.conf
+    state: absent
+
+- name: disable mongod default service
+  shell: "systemctl disable mongod"
+
+- name: create /etc/security/limits.d/mongodb.conf
+  copy:
+    src: security-mongodb.conf
+    dest: /etc/security/limits.d/mongodb.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name:  Set vm.dirty_ratio 
+  sysctl:
+    name: vm.dirty_ratio
+    value: '15'
+    state: present
+
+- name:  Set vm.dirty_background_ratio 
+  sysctl:
+    name: vm.dirty_background_ratio
+    value: '5'
+    state: present
+
+- name: Set vm.swappiness
+  sysctl:
+    name: vm.swappiness
+    value: '10'
+    state: present
+
+- name: Set net.core.somaxconn 
+  sysctl:
+    name: net.core.somaxconn
+    value: '4096'
+    state: present
+
+- name: Set net.ipv4.tcp_fin_timeout
+  sysctl:
+    name: net.ipv4.tcp_fin_timeout
+    value: '30'
+    state: present
+
+- name: net.ipv4.tcp_keepalive_intvl
+  sysctl:
+    name: net.ipv4.tcp_keepalive_intvl
+    value: '30'
+    state: present
+
+- name: net.ipv4.tcp_keepalive_time
+  sysctl:
+    name: net.ipv4.tcp_keepalive_time
+    value: '120'
+    state: present
+
+- name: net.ipv4.tcp_max_syn_backlog 
+  sysctl:
+    name: net.ipv4.tcp_max_syn_backlog 
+    value: '4096'
+    state: present
+
+- name: Kill existing mongo instances
+  shell: >
+    ps -ef|grep "mongod -f"|grep -v grep|awk '{ print "kill -9 "$2 }'|sh
+
+- name: Cleanup Mongo Instances
+  file:
+    path: /u01/mongodb/data
+    state: absent
+
+- name: delete socket file if they exist
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /tmp/mongodb-27101.sock
+    - /tmp/mongodb-27102.sock
+    - /tmp/mongodb-27103.sock
+
+- name: create directory if they don't exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: mongod
+    group: mongod
+    mode: 0775
+  with_items:
+    - /u01/mongodb/data
+    #- /u01/mongodb/cfg
+    #- /u01/mongodb/keyfile
+    #- /u01/mongodb/log
+  when: inventory_hostname == 'ajaymongosrc.dlpxdc.co'
+
+- name: Copy mongodb repository 
+  copy: 
+    src="{{ playbook_dir }}/tmp/install_pip.sh" 
+    dest=/tmp/install_pip.sh
+    mode=0775
+
+- name: Install pip
+  shell: /tmp/install_pip.sh
+  become: yes
+  become_user: root
+
+- name: Install mtools
+  shell: >
+    pip install mtools[mlaunch,mloginfo]
+  become: yes
+  become_user: root
+  when: inventory_hostname == 'ajaymongosrc.dlpxdc.co'
+
+- name: Upgrade pip
+  shell: >
+    pip install --upgrade pip
+  become: yes
+  become_user: root
+
+- name: Create Mongo Replicaset
+  shell: >
+    mlaunch init --replicaset --nodes 3 --name delphix_rs2710 --priority --port 27101 --dir /u01/mongodb/data --hostname ajaymongosrc.dlpxdc.co --auth --username clusteradmin --password delphix --auth-db admin --bind_ip_all --auth-roles  dbAdminAnyDatabase readWriteAnyDatabase userAdminAnyDatabase clusterAdmin
+  become: yes
+  become_user: mongod
+  when: inventory_hostname == 'ajaymongosrc.dlpxdc.co'
+
+- name: Fetch mongodb keyfile
+  fetch: 
+    src="/u01/mongodb/data/keyfile"
+    dest="{{ playbook_dir }}/tmp/keyfile" 
+    flat=yes
+  when: inventory_hostname == 'ajaymongosrc.dlpxdc.co'
+
+- name: Copy mongodb keyfile to staging
+  copy: 
+    dest="/home/delphix/keyfile"
+    src="{{ playbook_dir }}/tmp/keyfile"
+    owner=delphix
+    group=delphix
+    mode=0600
+  become: yes
+  become_user: root
+  when: inventory_hostname == 'ajaymongostg.dlpxdc.co'
+
+#- name: copy config101 file
+#  template: src=mongodb.conf.j2 dest="/u01/mongodb/cfg/mongod101.conf" mode=755 owner=mongod group=mongod
+#  vars:
+#    last3digitport: 101
+#
+#- name: copy config102 file
+#  template: src=mongodb.conf.j2 dest="/u01/mongodb/cfg/mongod102.conf" mode=755 owner=mongod group=mongod
+#  vars:
+#    last3digitport: 102
+#
+#- name: copy config103 file
+#  template: src=mongodb.conf.j2 dest="/u01/mongodb/cfg/mongod103.conf" mode=755 owner=mongod group=mongod
+#  vars:
+#    last3digitport: 103
+
+#- name: Uncomment security and replication parameters in mongod102.conf
+#  replace: path=/u01/mongodb/cfg/mongod102.conf regexp="#UNCOMMENTME" replace=""
+#
+#- name: Uncomment security and replication parameters in mongod103.conf
+#  replace: path=/u01/mongodb/cfg/mongod103.conf regexp="#UNCOMMENTME" replace=""
+
+##- name: copy config101 file
+##  copy:
+##    src: mongodb.conf
+##    dest: /u01/mongodb/cfg/mongod101.conf
+##    owner: mongod
+##    group: mongod
+##    mode: 0644
+##  notify:
+##    - restart mongodb
+
+#- name: Kill existing mongo instances
+#  shell: >
+#    ps -ef|grep "mongod -f"|grep -v grep|awk '{ print "kill -9 "$2 }'|sh && rm -Rf /u01/mongodb/data && mkdir /u01/mongodb/data
+#
+#- name: create directory if they don't exist
+#  file:
+#    path: "{{ item }}"
+#    state: directory
+#    owner: mongod
+#    group: mongod
+#    mode: 0775
+#  with_items:
+#    - /u01/mongodb/data
+
+#- name: Ensure mongodb is running
+#  shell: "sudo -H -u mongod bash -c '/usr/bin/mongod -f /u01/mongodb/cfg/mongod101.conf'"
+
+#- name: Ensure mongodb is running
+#  shell: "/usr/bin/mongod -f /u01/mongodb/cfg/mongod101.conf"
+#  become: yes
+#  become_user: mongod
+#
+#- name: Create clusteradmin user
+#  shell: >
+#    /usr/bin/mongo admin --port=27101 --eval "db.createUser({user: \"clusteradmin\",pwd: \"delphix\", roles: [\"userAdminAnyDatabase\", \"dbAdminAnyDatabase\", \"readWriteAnyDatabase\" ,\"clusterAdmin\"]})"
+#
+#- name: Generate Keyfile
+#  shell: >
+#    openssl rand -base64 741 > /u01/mongodb/keyfile/mongodb_keyauth
+#
+#- name: Update Permissions
+#  file:
+#    path: /u01/mongodb/keyfile/mongodb_keyauth
+#    state: file
+#    owner: mongod
+#    group: mongod
+#    mode: 0600
+#
+#- name: Kill existing mongo instances
+#  shell: >
+#    ps -ef|grep mongod|grep "mongod -f"|grep -v grep|awk '{ print "kill -9 "$2 }'|sh
+#
+#- name: Ensure mongodb is running
+#  shell: "/usr/bin/mongod -f /u01/mongodb/cfg/mongod101.conf"
+#  become: yes
+#  become_user: mongod
+
+#- name: install ntp
+#  yum: 
+#    name: ntp
+#    state: present

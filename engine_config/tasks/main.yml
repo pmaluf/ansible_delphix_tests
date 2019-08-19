@@ -1,0 +1,17 @@
+---
+
+   - block:
+        - name: include vars
+          include_vars: default_vars.yml
+
+        - name: register time
+          set_fact: time="{{ ansible_date_time.date + \" \" + ansible_date_time.time }}"
+
+        - name: Configure Engine (shell)
+          shell: "{{ playbook_dir }}/tmp/setup_engine.sh"
+          register: config_engine_output
+
+        - name: Check config_engine_output
+          debug: 
+            #msg: "{{ dx_get_appliance_output }}"
+            msg: "{{ config_engine_output.stdout.split('\n') | replace('\\r','') }}"

@@ -1,0 +1,3 @@
+provision_password: '$6$EKUdybfRceGSZN$f2zT4inHm.C79kEJs8Vmd5VbisU0/bxggW/IO4X5l4/LHvS9e.9OoqZN0UhdsErFa2jf/NZ2ViMFYVHei0NOe.'
+ansible_user: root
+ansible_password: sailboat

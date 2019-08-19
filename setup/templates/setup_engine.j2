@@ -1,0 +1,289 @@
+#!/bin/bash
+# 	Script to be used to configure a Delphix Engine
+# Usage
+#   ./configure_engine.sh test534dlpx.dcenter.delphix.com test534dlpx sysadmin delphix sysadmin@delphix.com admin@delphix.com "US/Central" "North-America.pool.ntp.org" "M"
+#   ./configure_engine.sh test534dlpx.dcenter.delphix.com test534dlpx sysadmin delphix sysadmin@delphix.com admin@delphix.com "US/Central" "North-America.pool.ntp.org" "V"
+#================================================================================
+#
+# The guest running this script should have curl binary
+
+###############################
+#         Var section         #
+###############################
+#DE=$1
+#HOSTNAME=$2
+#SYSPASSWORD=$3
+#ADMINPASSWORD=$4
+#SYSEMAILADDRESS=$5
+#DBAEMAILADDRESS=$6
+#TIMEZONE=$7
+#NTPSERVER=$8
+#ENGINETYPE=$9
+
+DE="{{ DELPHIX_ENGINE_IP }}"
+HOSTNAME="{{ DELPHIX_ENGINE_SHORT_IP }}"
+SYSPASSWORD="sysadmin"
+ADMINPASSWORD="delphix"
+SYSEMAILADDRESS="sysadmin@delphix.com"
+DBAEMAILADDRESS="admin@delphix.com"
+TIMEZONE="US/Central"
+NTPSERVER="North-America.pool.ntp.org"
+ENGINETYPE="V"
+
+URL=http://${DE}
+export URL
+
+create_session()
+{
+	date +%F" "%T"   [INFO] Create new Delphix Session. "
+	# Create API session
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/session \
+		-c ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+	{
+		"type": "APISession",
+		"version": {
+			"type": "APIVersion",
+			"major": {{ API_MAJOR }},
+			"minor": {{ API_MINOR }},
+			"micro": {{ API_MICRO }}
+		}
+	}
+	EOF
+	echo " "
+	echo " "
+}
+
+
+
+authenticate_user()
+{
+	username=$1
+	password=$2
+	date +%F" "%T"   [INFO] Authenticating to $DE..."
+	# Authenticate to the DelphixEngine
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/login \
+			-b ~/cookies.txt -c ~/cookies.txt -H "Content-Type: application/json" <<-EOF1
+	{
+			"type": "LoginRequest",
+			"username": "$username",
+			"password": "$password"
+	}
+	EOF1
+	echo " "
+	echo " "
+}
+
+exec_storage_test()
+{
+	date +%F" "%T"   [INFO] Running storage test - it can run up to 3 hours"
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/storage/test \
+	    -b ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+	    {
+	        "type": "StorageTestParameters",
+	        "tests": "ALL"
+	    }
+	EOF
+	echo " "
+	echo " "
+}
+
+update_password()
+{
+	username=$1
+	password=$2
+	if [ $username = "sysadmin" ]; then
+		userid="USER-1"
+	elif [ $username = "admin" ]; then
+		userid="USER-2"
+	else
+		echo "User $username not supported/handled."
+	fi
+	date +%F" "%T"   [INFO] Set new password for $username"
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/user/$userid/updateCredential \
+		-b ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+		{
+			"type": "CredentialUpdateParameters",
+			"newCredential": {
+				"type": "PasswordCredential",
+				"password": "$password"
+			}
+		}
+	EOF
+	echo " "
+	echo " "
+}
+
+update_userinfo()
+{
+	username=$1
+	EMAILADDRESS=$2
+	FIRSTNAME=$3
+	LASTNAME=$4
+	if [ $username = "sysadmin" ]; then
+		userid="USER-1"
+	elif [ $username = "admin" ]; then
+		userid="USER-2"
+	else
+		echo "User $username not supported/handled."
+	fi
+	date +%F" "%T"   [INFO] Set $username to not ask for new password after change"
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/user/$userid \
+		-b ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+		{
+			"type": "User",
+			"passwordUpdateRequested": false,
+			"emailAddress": "$EMAILADDRESS",
+			"firstName": "FIRSTNAME",
+			"lastName": "$LASTNAME"
+		}
+	EOF
+	echo " "
+	echo " "
+}
+
+initialize_system()
+{
+	date +%F" "%T"   [INFO] Gather data device information . . ."
+	#POSTDEVICES="{\"type\": \"ControlNodeInitializationParameters\",\"devices\": ["
+	POSTDEVICES="{\"type\": \"SystemInitializationParameters\",\"defaultUser\":\"admin\", \"defaultPassword\": \"$ADMINPASSWORD\", \"devices\": ["
+	disks=`curl -s -X GET ${URL}/resources/json/delphix/storage/device -b ~/cookies.txt -H "Content-Type: application/json"`
+	# line split
+	#lines=`echo $disks | cut -d "[" -f2 | cut -d "]" -f1 | awk -v RS='},{}' -F: '{print $0}'`
+	lines=`echo $disks | cut -d "[" -f2 | cut -d "]" -f1 | awk -v RS='},{' -F: '{print $0}'`
+	#echo $lines
+
+	# add non configured devices to intialization string
+	while read -r line ; do
+	  type=`echo $line | sed -e 's/[{}]/''/g' | sed s/\"//g | awk -v RS=',' -F: '$1=="configured"{print $2}'`
+	  #echo $type;
+	  if [[ "$type" == "false" ]]; then
+		POSTDEVICES+="\""
+		dev=`echo $line | sed -e 's/[{}]/''/g' | sed s/\"//g | awk -v RS=',' -F: '$1=="reference"{print $2}'`
+		POSTDEVICES+=$dev
+		POSTDEVICES+="\","
+	  fi
+	done <<< "echo $lines"
+
+  {% raw %}
+	POSTDEVICES=${POSTDEVICES::${#POSTDEVICES}-1}
+  {% endraw %}
+	POSTDEVICES+="]}"
+	echo $POSTDEVICES
+	echo " "
+	#echo " "
+
+	date +%F" "%T"   [INFO] Kick off configuration"
+	echo $POSTDEVICES | curl -s -X POST -k --data @- ${URL}/resources/json/delphix/domain/initializeSystem \
+		-b ~/cookies.txt -H "Content-Type: application/json"
+	echo " "
+	echo " "
+	sleep 60
+}
+
+setup_ntp()
+{
+	date +%F" "%T"   [INFO] Set NTP"
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/service/time \
+		-b ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+		{   
+		  "type": "TimeConfig",
+		  "systemTimeZone": "$TIMEZONE",
+		  "ntpConfig": {
+			"type": "NTPConfig",
+			"enabled": true,
+			"servers": [
+				"$NTPSERVER"
+			]
+		}
+	  }
+	EOF
+	echo " "
+	echo " "
+}
+
+setup_ldap()
+{
+	date +%F" "%T"   [INFO] Enabling LDAP authentication . . . "
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/service/ldap/server \
+		-b ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+		{
+		  "type": "LdapServer",
+		  "name": "myldapserver:636",
+		  "host": "myldapserver",
+		  "port": 636,
+		  "authMethod": "SIMPLE",
+		  "useSSL": false
+		}
+	EOF
+	echo " "
+	echo " "
+}
+
+setup_hostname()
+{
+	date +%F" "%T"   [INFO] Set hostname"
+	ssh -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" sysadmin@$DE "system;update; set hostname=\"$HOSTNAME\"; commit"
+	echo " "
+	echo " "
+}
+
+
+register_appliance()
+{
+	date +%F" "%T"   [INFO] Register appliance"
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/registration/status \
+		-b ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+		{
+		  "status":"REGISTERED",
+		  "type":"RegistrationStatus"
+		}
+	EOF
+	echo " "
+	echo " "
+}
+
+set_engine_purpose()
+{
+	purpose=$1
+	date +%F" "%T"   [INFO] Setting up engine purpose for $purpose . . . "
+	curl -s -X POST -k --data @- ${URL}/resources/json/delphix/system \
+		-b ~/cookies.txt -H "Content-Type: application/json" <<-EOF
+		{
+		  "type": "SystemInfo",
+		  "engineType": "$purpose"
+		}
+	EOF
+	echo " "
+	echo " "
+	sleep 10
+}
+
+create_session
+authenticate_user sysadmin sysadmin
+#exec_storage_test
+update_password sysadmin sysadmin
+update_userinfo sysadmin sysadmin@delphix.com System Administrator 
+initialize_system
+create_session
+authenticate_user sysadmin sysadmin
+
+if [ $ENGINETYPE = "M" ]; then
+	set_engine_purpose "MASKING"
+elif [ $ENGINETYPE = "V" ]; then
+	set_engine_purpose "VIRTUALIZATION"
+else
+	echo "Invalid Engine Type. Valid values are V|M V=Virtualization and M=Masking"
+fi
+
+setup_ntp
+#setup_ldap
+#setup_hostname
+register_appliance
+create_session
+authenticate_user admin delphix
+update_password admin delphix
+update_userinfo admin admin@delphix.com Delphix Administrator 
+create_session
+authenticate_user sysadmin sysadmin
+
+exit 0

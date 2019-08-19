@@ -1,12 +1,31 @@
 ---
+   - name: include vars
+     include_vars: default_vars.yml
+
+   - name: setup engine configuration
+     template: src=setup_engine.j2 dest="{{ playbook_dir }}/tmp/setup_engine.sh" mode=755
+
+   - name: setup toolkit upload script
+     template: src=upload-toolkit.j2 dest="{{ playbook_dir }}/tmp/upload-toolkit.py" mode=755
+
+   - name: copy mongo toolkit to template folder
+     template: src=mongo-toolkit.j2 dest="{{ playbook_dir }}/tmp/mongo-toolkit.json" mode=755
 
    - name: create dxtoolkit configuration
      template: src=dxtools.conf.j2 dest="{{ DXLOC }}/dxtools.conf" mode=755
 
    - name: create dsource ingestion script
-     template: src=adddsource.j2 dest="{{ playbook_dir }}/adddsource.sh" mode=755
+     template: src=adddsource.j2 dest="{{ playbook_dir }}/tmp/adddsource.sh" mode=755
      when: dxtoolkit == False
 
    - name: create vdb provision  script
-     template: src=addvdb.j2 dest="{{ playbook_dir }}/addvdb.sh" mode=755
+     template: src=addvdb.j2 dest="{{ playbook_dir }}/tmp/addvdb.sh" mode=755
+     when: dxtoolkit == False
+
+   - name: create addEnvironment script
+     template: src=addEnvironments.j2 dest="{{ playbook_dir }}/tmp/addEnvironments.sh" mode=755
+     when: dxtoolkit == False
+
+   - name: create pip install script
+     template: src=install_pip.j2 dest="{{ playbook_dir }}/tmp/install_pip.sh" mode=755
      when: dxtoolkit == False

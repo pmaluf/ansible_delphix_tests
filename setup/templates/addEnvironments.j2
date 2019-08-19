@@ -1,0 +1,138 @@
+#!/bin/bash
+
+API_MAJOR="1"
+API_MINOR="9"
+API_MICRO="3"
+DELPHIX_ENGINE_IP="{{ DELPHIX_ENGINE_IP }}"
+DELPHIX_ADMIN_USER="{{ DELPHIX_ADMIN_USER }}"
+DELPHIX_ADMIN_PASSWORD="{{ DELPHIX_ADMIN_PASSWORD }}"
+
+DELPHIX_DSOURCE_GROUP_NAME="{{ DELPHIX_DSOURCE_GROUP_NAME }}"
+DELPHIX_VDB_GROUP_NAME="{{ DELPHIX_VDB_GROUP_NAME }}"
+
+DELPHIX_STG_ENV_NAME="{{ DELPHIX_STG_ENV_NAME }}"
+DELPHIX_STG_HOST_NAME="{{ DELPHIX_STG_HOST_NAME }}"
+DELPHIX_STG_ENVUSER_NAME="{{ DELPHIX_STG_ENVUSER_NAME }}"
+DELPHIX_STG_ENVUSER_PWD="{{ DELPHIX_STG_ENVUSER_PWD }}"
+DELPHIX_STG_TOOLKIT_DIR="{{ DELPHIX_STG_TOOLKIT_DIR }}"
+
+DELPHIX_TGT_ENV_NAME="{{ DELPHIX_TARGET_ENV_NAME }}"
+DELPHIX_TGT_HOST_NAME="{{ DELPHIX_TARGET_HOST_NAME }}"
+DELPHIX_TGT_ENVUSER_NAME="{{ DELPHIX_TARGET_ENVUSER_NAME }}"
+DELPHIX_TGT_ENVUSER_PWD="{{ DELPHIX_TARGET_ENVUSER_PWD }}"
+DELPHIX_TGT_TOOLKIT_DIR="{{ DELPHIX_STG_TOOLKIT_DIR }}"
+
+
+# Login as ADMIN
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/session \
+    -c ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{
+    "type": "APISession",
+    "version": {
+        "type": "APIVersion",
+        "major": $API_MAJOR,
+        "minor": $API_MINOR,
+        "micro": $API_MICRO
+    }
+}
+EOF
+echo
+
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/login \
+    -b ~/cookies.txt -c ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{
+    "type": "LoginRequest",
+    "username": "$DELPHIX_ADMIN_USER",
+    "password": "$DELPHIX_ADMIN_PASSWORD"
+}
+EOF
+echo
+
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/user/USER-2 -b ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{
+    "type": "User",
+    "sessionTimeout": 3000
+}
+EOF
+echo
+
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/group/GROUP-1/delete -b ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{}
+EOF
+echo
+
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/group -b ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{
+    "type": "Group",
+    "name": "$DELPHIX_DSOURCE_GROUP_NAME"
+}
+EOF
+echo
+
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/group -b ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{
+    "type": "Group",
+    "name": "$DELPHIX_VDB_GROUP_NAME"
+}
+EOF
+echo
+
+sleep 15
+
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/environment -b ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{
+    "type": "HostEnvironmentCreateParameters",
+    "primaryUser": {
+        "type": "EnvironmentUser",
+        "name": "$DELPHIX_STG_ENVUSER_NAME",
+        "credential": {
+            "type": "PasswordCredential",
+            "password": "$DELPHIX_STG_ENVUSER_PWD"
+        }
+    },
+    "hostEnvironment": {
+        "type": "UnixHostEnvironment",
+        "name": "$DELPHIX_STG_ENV_NAME"
+    },
+    "hostParameters": {
+        "type": "UnixHostCreateParameters",
+        "host": {
+            "type": "UnixHost",
+            "address": "$DELPHIX_STG_HOST_NAME",
+            "toolkitPath": "$DELPHIX_STG_TOOLKIT_DIR"
+        }
+    }
+}
+EOF
+echo
+
+sleep 90
+
+curl -s -X POST -k --data @- http://$DELPHIX_ENGINE_IP/resources/json/delphix/environment -b ~/cookies.txt -H "Content-Type: application/json" <<EOF
+{
+    "type": "HostEnvironmentCreateParameters",
+    "primaryUser": {
+        "type": "EnvironmentUser",
+        "name": "$DELPHIX_TGT_ENVUSER_NAME",
+        "credential": {
+            "type": "PasswordCredential",
+            "password": "$DELPHIX_TGT_ENVUSER_PWD"
+        }
+    },
+    "hostEnvironment": {
+        "type": "UnixHostEnvironment",
+        "name": "$DELPHIX_TGT_ENV_NAME"
+    },
+    "hostParameters": {
+        "type": "UnixHostCreateParameters",
+        "host": {
+            "type": "UnixHost",
+            "address": "$DELPHIX_TGT_HOST_NAME",
+            "toolkitPath": "$DELPHIX_TGT_TOOLKIT_DIR"
+        }
+    }
+}
+EOF
+echo
+
+sleep 30

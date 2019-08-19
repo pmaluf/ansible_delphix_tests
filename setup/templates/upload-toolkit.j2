@@ -1,0 +1,266 @@
+#!/usr/bin/env python
+
+#
+# Copyright (c) 2014, 2018 by Delphix. All rights reserved.
+#
+
+import os
+import sys
+import json
+import argparse
+from argparse import RawTextHelpFormatter
+import urllib
+import httplib
+
+
+SCRIPT_DESCRIPTION = """\
+This script uploads a toolkit JSON file to a target Delphix Engine.
+
+Note that uploaded toolkits which cannot be parsed (invalid JSON or
+unexpected format) will receive an error from the server and upload
+will fail. Use tools like JSON Lint to assist in correcting errors.
+"""
+
+# globals used by helper functions
+dlpx_host = ""
+dlpx_user = ""
+dlpx_password = ""
+dlpx_cookie = None
+
+
+def main():
+    global dlpx_host
+    global dlpx_user
+    global dlpx_password
+    global dlpx_cookie
+
+    # parse args and print usage message if necessary
+    parser = argparse.ArgumentParser(description=SCRIPT_DESCRIPTION, formatter_class=RawTextHelpFormatter)
+    parser.add_argument("toolkitPath", help="The path to the toolkit to upload.", type=str)
+    parser.add_argument("dlpxHost", help="The target Delphix Engine.", type=str)
+    parser.add_argument("dlpxUser", help="The username to use to log into the Delphix Engine.", type=str,
+            nargs="?", default="admin")
+    parser.add_argument("dlpxPassword", help="The password to use to log into the Delphix Engine.", type=str,
+            nargs="?")
+    args = parser.parse_args()
+
+    # save args to variables with shorter names
+    toolkit_path = args.toolkitPath
+    dlpx_host = args.dlpxHost
+    dlpx_user = args.dlpxUser
+    dlpx_password = args.dlpxPassword
+    print "Uploading toolkit \"" + toolkit_path + "\"..."
+
+    # confirm toolkit file is accessible
+    if not os.path.exists(toolkit_path):
+        sys.stderr.write("ERROR: Could not open file " + toolkit_path + " for upload")
+        sys.exit(1)
+
+    # read toolkit content
+    toolkit = None
+    with open(toolkit_path, 'rb') as f:
+        toolkit = json.loads(f.read())
+
+    api_version = get_api_version(toolkit)
+
+    # log into the Delphix Engine in order to set cookie
+    print "Logging into " + dlpx_host + "..."
+    log_into_dlpx_engine(api_version)
+    print "SUCCESS - Logged in as " + dlpx_user
+
+    # get upload token
+    print "Getting upload token..."
+    token = get_upload_token()
+    print "SUCCESS - Token is " + token
+
+    # perform uplod
+    print "Performing upload..."
+    file_name = os.path.basename(toolkit_path)
+    dlpx_upload_toolkit(file_name, toolkit, token)
+    print "SUCCESS - Toolkit successfully uploaded"
+
+    # exit with success
+    sys.exit(0)
+
+
+def get_api_version(toolkit):
+     # verify toolkit has api version
+    well_formed = True
+    if toolkit.get("buildApi") != None:
+        api_version = toolkit["buildApi"]
+        well_formed = well_formed and api_version.get("type") == "APIVersion"
+        well_formed = well_formed and api_version.get("major") != None
+        well_formed = well_formed and api_version.get("minor") != None
+        well_formed = well_formed and api_version.get("micro") != None
+    else:
+        well_formed = False
+
+    if not well_formed:
+        sys.stderr.write("ERROR: The 'buildApi' field is either missing or malformed. The field must be of the form:\n")
+        sys.stderr.write("{\n\t\"type\": \"APIVersion\",\n\t\"major\":1,\n\t\"minor\":7,\n\t\"micro\":1\n}\n")
+        sys.exit(1)
+
+    return api_version
+
+
+def check_response(response):
+    if response.status is not 200:
+        sys.stderr.write("ERROR: Expected a response of HTTP status 200 (Success) but received something different.\n")
+        sys.stderr.write("Response status: " + str(response.status) + "\n")
+        sys.stderr.write("Response reason: " + response.reason + "\n")
+        sys.exit(1)
+
+
+def dlpx_post_json(resource, payload):
+    global dlpx_host
+    global dlpx_user
+    global dlpx_password
+    global dlpx_cookie
+
+    # encode payload for request
+    data = json.dumps(payload)
+
+    # form http header, add cookie if one has been set
+    headers = { "Content-type": "application/json" }
+    if dlpx_cookie is not None:
+        headers["Cookie"] = dlpx_cookie
+
+    # issue request
+    h = httplib.HTTPConnection(dlpx_host)
+    h.request('POST', "/resources/json/" + resource, data, headers)
+    r = h.getresponse()
+    check_response(r)
+
+    # save cookie if one was received
+    if r.getheader("set-cookie", None) is not None:
+        dlpx_cookie = r.getheader("set-cookie")
+
+    # return response as parsed json
+    r_payload = r.read()
+    return json.loads(r_payload)
+
+
+def log_into_dlpx_engine(api_version):
+    dlpx_post_json("delphix/session", {
+        "type": "APISession",
+        "version": {
+            "type": "APIVersion",
+            "major": api_version["major"],
+            "minor": api_version["minor"],
+            "micro": api_version["micro"]
+            }
+        })
+
+    dlpx_post_json("delphix/login", {
+        "type": "LoginRequest",
+        "username": dlpx_user,
+        "password": dlpx_password
+        })
+
+
+def get_upload_token():
+    response = dlpx_post_json("delphix/toolkit/requestUploadToken", {})
+    return response["result"]["token"]
+
+
+def print_upload_response(response):
+    if response["type"] == "OKResult":
+        print "SUCCESS - Received OKResult"
+    elif response["type"] == "ErrorResult":
+        # just dump whole error in case the below is not helpful
+        sys.stderr.write("\nERROR: Delphix Engine returned ErrorResult. Dumping full error below...\n")
+        sys.stderr.write(json.dumps(response) + "\n")
+
+        # try to make it pretty
+        error = response["error"]
+
+        # Two types of errors are returned, those with single string descriptions and those that return errors
+        # for individuals fields of the toolkit being uploaded.
+        # Single string descriptions will just be at the path error.details
+        # More complex errors will contain errors for each invalid field. For example:
+        # error.name.details                = specific error with the toolkit name
+        # error.provisionParameters.details = specific error with the toolkit parameters
+        # error.type.details                = specific error with the toolkit type
+        # etc
+        if error["details"] is not None:
+            sys.stderr.write("ERROR: The following errors occured...\n")
+            # Check if error has single string description of the problem
+            if type(error["details"]) is unicode:
+                sys.stderr.write("\t" + error["details"] + "\n")
+            # Check if error has list of fields each with its own specific error
+            elif hasattr(error["details"], "items"):
+                for key, value in error["details"].items():
+                    sys.stderr.write("\t\"" + key + "\" property error -> ")
+                    if "details" in value:
+                        sys.stderr.write(value["details"] + "\n")
+                    else:
+                        sys.stderr.write(json.dumps(value) + "\n")
+        # attempt to display important action for fixing error
+        if error["action"] is not None:
+            sys.stderr.write("ACTION: " + error["action"] + "\n")
+
+        sys.exit(1)
+    else:
+        sys.stderr.write("Expected either an OKResult, ErrorResult but got something else. Error JSON printed below...\n")
+        sys.stderr.write(json.dumps(response) + "\n")
+        sys.exit(1)
+
+
+def dlpx_upload_toolkit(file_name, toolkit, token):
+    global dlpx_host
+    global dlpx_user
+    global dlpx_password
+    global dlpx_cookie
+
+    def encode (toolkit_content, fields={}):
+        BOUNDARY = '----------boundary------'
+        CRLF = '\r\n'
+        body = []
+
+        # add the metadata about the upload first
+        for key, value in fields.items():
+            body.extend(
+              ['--' + BOUNDARY,
+               'Content-Disposition: form-data; name="%s"' % key,
+               '',
+               value,
+              ])
+
+        # put file contents in body
+        body.extend(
+          ['--' + BOUNDARY,
+           'Content-Disposition: form-data; name="file"; filename="%s"'
+           % file_name,
+           # the upload server determines the mime-type, no need to set it.
+           'Content-Type: application/octet-stream',
+           '',
+           toolkit_content,
+           ])
+        body.extend(['--' + BOUNDARY + '--', ''])
+
+        # return header content to use and body content
+        return 'multipart/form-data; boundary=%s' % BOUNDARY, CRLF.join(body)
+
+    # start body of function here
+
+    # encode file content
+    content_type, body = encode(json.dumps(toolkit), { "token": token })
+
+    # form http header, add cookie if one has been set
+    headers = { 'Content-Type': content_type }
+    if dlpx_cookie is not None:
+        headers["Cookie"] = dlpx_cookie
+
+    # issue request
+    h = httplib.HTTPConnection(dlpx_host)
+    h.request('POST', "/resources/json/delphix/data/upload", body, headers)
+    r = h.getresponse()
+    check_response(r)
+
+    # read response body
+    response_body = r.read()
+    print_upload_response(json.loads(response_body))
+
+
+if __name__ == "__main__":
+    main()

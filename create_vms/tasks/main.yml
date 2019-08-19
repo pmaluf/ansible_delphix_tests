@@ -1,0 +1,42 @@
+---
+
+     - name: include vars
+       include_vars: default_vars.yml
+
+     - name: Check if source server exist
+       shell: 'dc list {{ item.servername }}'
+       register: server 
+       ignore_errors: yes
+       loop: "{{ serverlist }}"
+
+     - name: Delete servers 
+       shell: 'dc destroy {{ item.item.servername }}'
+       with_items: "{{ server.results }}"
+       when: item.rc == 0
+
+     - name: wait
+       shell: >
+         a=1;while [ $a -gt 0 ]; do echo "IN"; sleep 1; a=`dc list|grep DELETING|wc -l`; done
+
+     - name: Check if source server exist
+       shell: 'dc list {{ item.servername }}'
+       register: server 
+       ignore_errors: yes
+       loop: "{{ serverlist }}"
+
+     - name: slon       
+       debug:
+         var: server.results
+
+     - name: Deploy source server
+       shell: 'dc clone-latest {{ item.item.serverclone }}  {{ item.item.servername}} '
+       with_items: "{{ server.results }}"
+       when: item.rc != 0
+
+     - name: wait
+       #shell: sleep 600
+       shell: >
+         a=1;while [ $a -gt 0 ]; do echo "IN"; sleep 1; a=`dc list|grep INITIALIZING|wc -l`; done
+
+     - name: wait
+       shell: sleep 300

@@ -1,0 +1,67 @@
+---
+
+ - hosts: localhost
+   gather_facts: no 
+   roles:
+       - role: 
+           setup
+
+ - hosts: localhost
+   gather_facts: no 
+   tasks:
+     - block:
+       - name: delete known_hosts file
+         file:
+           path: "{{ item }}"
+           state: absent
+         with_items:
+           - /home/provision/.ssh/known_hosts
+
+ - hosts: dlpxdc.co
+   gather_facts: no
+   roles:
+       - role: create_vms
+
+ - hosts: mongoservers
+   gather_facts: no 
+   roles:
+       - role: 
+           config_pubkey
+   remote_user: root
+   become: true
+
+ - hosts: mongoservers
+   gather_facts: yes
+   roles:
+       - role: mongodb
+   remote_user: root
+   become: true
+
+ - hosts: localhost
+   gather_facts: no 
+   tasks:
+     - block:
+       - name: wait
+         shell: sleep 150
+
+ - hosts: localhost
+   gather_facts: yes
+   roles:
+       - role: engine_config
+       - role: install_mongo_plugin
+
+ - hosts: localhost
+   gather_facts: no 
+   tasks:
+     - block:
+       - name: wait
+         shell: sleep 150
+
+ - hosts: localhost
+   connection: local
+   roles:
+       - role: setup
+       - role: setup_environments
+       - role: dSource
+       - role: vdb
+       - role: snapshot_tests

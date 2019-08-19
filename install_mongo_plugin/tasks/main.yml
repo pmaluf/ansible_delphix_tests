@@ -1,0 +1,13 @@
+---
+
+   - block:
+        - name: include vars
+          include_vars: default_vars.yml
+
+        - name: register time
+          set_fact: time="{{ ansible_date_time.date + \" \" + ansible_date_time.time }}"
+
+        - name: Install Mongo Plugin
+          script: "{{ playbook_dir }}/tmp/upload-toolkit.py {{ playbook_dir }}/tmp/mongo-toolkit.json ajaymongodlpx.dlpxdc.co admin delphix" 
+          register: config_engine_output
+

@@ -1,0 +1,16 @@
+---
+
+   - block:
+        - name: include vars
+          include_vars: default_vars.yml
+
+        - name: register time
+          set_fact: time="{{ ansible_date_time.date + \" \" + ansible_date_time.time }}"
+
+        - name: Configure Environments (shell)
+          shell: "{{ playbook_dir }}/tmp/addEnvironments.sh"
+          register: config_env_output
+
+        - name: Check config_env_output
+          debug: 
+            msg: "{{ config_env_output.stdout.split('\n') | replace('\\r','') }}"

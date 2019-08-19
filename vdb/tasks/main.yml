@@ -30,12 +30,19 @@
 
    - block:
         - name: register time
+          #set_fact: time="{{ lookup('pipe', 'date +\"%Y-%m-%d %H:%M:%S\"') }}"
           set_fact: time="{{ ansible_date_time.date + \" \" + ansible_date_time.time }}"
 
         - name: Provision a VDB (shell)
           delegate_to: 127.0.0.1
-          shell: "{{ playbook_dir }}/addvdb.sh {{ item.vdb }} {{ item.dsource }}"
+          shell: "{{ playbook_dir }}/tmp/addvdb.sh {{ item.vdb }} {{ item.dsource }}"
           loop: "{{ VDBDSOURCE_LIST }}"
+          register: addvdb_output
+
+        #- name: Check addvdb.sh output
+        #  debug: 
+        #    msg: "{{ addvdb_output }}"
+        #    #msg: "{{ addvdb_output.stderr.split('\n') | replace('\\r','') }}"
 
         - name: Wait for job
           delegate_to: 127.0.0.1
@@ -55,7 +62,7 @@
    - block:
         - name: Provision a VDB (dxtoolkit)
           delegate_to: 127.0.0.1
-          shell: "{{ DXLOC }}/dx_provision_db "
+          shell: "{{ DXLOC }}/dx_provision_db"
      when: (CREATE_VDB == True and dxtoolkit == True)
 
    - name: Check if VDB exists and it's running

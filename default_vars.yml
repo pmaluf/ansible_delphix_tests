@@ -1,0 +1,83 @@
+DXLOC: "/home/provision/dxtoolkit2"
+dxtoolkit: False
+VDBDSOURCE_LIST: [ {"dsource": "mongostg1", "vdb": "mongovdb1"} ]
+DELPHIX_ADMIN_USER: admin
+DELPHIX_ADMIN_PASSWORD: delphix
+API_MAJOR: 1
+API_MINOR: 9
+API_MICRO: 3
+
+#DELPHIX_DOMAIN: dcenter.delphix.com
+DELPHIX_DOMAIN: dlpxdc.co
+DELPHIX_ENGINE_SHORT_IP: ajaymongodlpx
+DELPHIX_ENGINE_IP: "{{ DELPHIX_ENGINE_SHORT_IP }}.{{ DELPHIX_DOMAIN }}"
+
+serverlist : [
+   {"servername": "{{ DELPHIX_ENGINE_SHORT_IP }}", "serverclone": "dlpx-5.3.5.0" },
+   {"servername": "ajaymongosrc", "serverclone": "centos-7.6-oracle-18.0.0.0-src"},
+   {"servername": "ajaymongostg", "serverclone": "centos-7.6-oracle-18.0.0.0-tgt"},
+   {"servername": "ajaymongotgt", "serverclone": "centos-7.6-oracle-18.0.0.0-tgt"}
+]
+
+# DSOURCE PARAMETERS
+DELPHIX_DSOURCE_NAME: "mongostg1"
+DELPHIX_DSOURCE_PORT: 28001
+DELPHIX_DSOURCE_GROUP_NAME: "Mongo dSources"
+DELPHIX_STG_ENV_NAME: "ajaymongostg"
+DELPHIX_STG_HOST_NAME: "{{ DELPHIX_STG_ENV_NAME }}.{{ DELPHIX_DOMAIN }}"
+DELPHIX_STG_ENVUSER_NAME: "delphix"
+DELPHIX_STG_ENVUSER_PWD: "delphix"
+DELPHIX_STG_TOOLKIT_DIR: "/u01/delphix/toolkit"
+DELPHIX_DSOURCE_MOUNTBASE: "/mnt/provision"
+DELPHIX_STG_KEYFILE: "/home/delphix/keyfile"
+DELPHIX_SRCCFG_NAME: "Mongo27101_ajaymongosrc"
+DELPHIX_DSOURCE_SOURCE_PARAMETERS: {
+      "dSourceType":"Staging",
+      "mongoHost":"$DELPHIX_STG_HOST_NAME",
+      "mongoPort":"{{ DELPHIX_DSOURCE_PORT }}",
+      "bindIP":"0.0.0.0",
+      "keyfilePath":"$DELPHIX_STG_KEYFILE",
+      "storageEngine":"wiredTiger",
+      "oplogSize":1024,
+      "journalInterval":30,
+      "mountPath":"$DELPHIX_DSOURCE_MOUNTPOINT",
+      "mongoDBUser":"clusteradmin",
+      "mongoDBPassword":"delphix"
+    }
+CREATE_VDB: True
+CREATE_DSOURCE: True
+
+# VDB PARAMETERS
+DELPHIX_VDB_NAME: "mongovdb1"
+DELPHIX_VDB_PORT: 29001
+DELPHIX_TARGET_ENV_NAME: "ajaymongotgt"
+DELPHIX_TARGET_HOST_NAME: "{{ DELPHIX_TARGET_ENV_NAME }}.{{ DELPHIX_DOMAIN }}"
+DELPHIX_TARGET_ENVUSER_NAME: "delphix"
+DELPHIX_TARGET_ENVUSER_PWD: "delphix"
+DELPHIX_TARGET_TOOLKIT_DIR: "/u01/delphix/toolkit"
+DELPHIX_VDB_GROUP_NAME: "Mongo VDBs"
+DELPHIX_VDB_MOUNTBASE: "/mnt/provision"
+DELPHIX_VDB_REPO_NAME: "EDSI MongoDB (v4.0.11)"
+DELPHIX_SRC_CONTAINER_NAME: "mongostg1"
+DELPHIX_VDB_SOURCE_PARAMETERS: {
+      "mountPath": "$DELPHIX_VDB_MOUNTBASE/$DELPHIX_VDB_NAME",
+      "journalInterval": 30,
+      "mongoPort": "{{ DELPHIX_VDB_PORT }}",
+      "oplogSize": 1024,
+      "mongoDBUser": "clusteradmin",
+      "mongoDBPassword": "delphix",
+      "enableKeyAuth": "N",
+      "keyfilePath": "",
+      "bindIP": "0.0.0.0"
+    }
+DELPHIX_VDB_SOURCECONFIG_PARAMETERS: {
+            "prettyName": "${DELPHIX_VDB_NAME}_S{DELPHIX_VDB_PORT}",
+            "discoveryType": "Manual",
+            "replicaSet": "N/A",
+            "mongoPort": "{{ DELPHIX_VDB_PORT }}",
+            "mongoHost": "$DELPHIX_TARGET_HOST_NAME",
+            "dbPath": "$DELPHIX_VDB_MOUNTBASE/$DELPHIX_VDB_NAME"
+      }
+
+# add flag to control adding VDB and dSource
+# provision a VDB from the existing VDB and refresh
